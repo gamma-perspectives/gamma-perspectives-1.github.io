@@ -1,6 +1,3 @@
-;; This buffer is for text that is not saved, and for Lisp evaluation.
-;; To create a file, visit it with C-x C-f and enter text in its buffer.
-
 The goals of this site are three fold
 1) Chronicle to  my future self thoughts I had at different points in time
 2) Writing about thoughts provides clarity
