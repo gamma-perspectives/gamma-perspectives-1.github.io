@@ -2,10 +2,199 @@
 title: "Expectations Investing"
 output: html_notebook
 ---
+```{r}
+library(tidyverse)
+library(dplyr)
+```
+
+Utility functions that are commonly used for calculating residual value and present value
+
+```{r}
+present_value <- function(future_value,discount_rate, num_periods){
+  cat("future value: ",as.numeric(future_value),"\n")
+  return (future_value / ((1+ discount_rate) ^ num_periods))
+}
+residual_value_inflation_method <- function(nopat, inflation_rate, cost_of_capital){
+  return (nopat * (1+ inflation_rate)/(cost_of_capital-inflation_rate))
+}
+```
+
 
 In this R notebook, the goal is to try to implement the expectations investing framework of mauboussin and rappaport.
 
+
+
 The basic framework consists of value_triggers that influence value_factors that eventually influce the operating drivers that have a direct bearing on shareholder value
+
+Operating Drivers: Sales growth rate, Operating Profit margin and Incremental Investment rate ![Alt Text](../images/expectations_value_drivers.jpeg)
+
+
+
+
+In the following section, from chapter-3 of the book, we look at the tension between operating profit margin and cost of capital. 
+
+*Threshold Margin * is the minimum operating profit margin required for a given cost of capital so that growth in sales actually adds to the NPV of future cash flows 
+```{r}
+sales_growth_rate <- 12/100 #12%
+opm <- 10/100 # 10%
+cash_tax_rate <- 35/100 #35%
+incremental_investment_rate <- 15/100 #15%
+inflation_rate <- 2/100 #2%
+cost_of_capital <- 10/100 #10%
+static_incremental_investment <- 1.8
+
+
+table=data.frame(matrix(ncol=0,nrow=10))
+rownames(table)<-c("sales","operating_profit","cash_taxes","NOPAT","FCF","PV_FCF","PV_CUMULATIVE_FCF","PV_RESIDUAL_VALUE","shareholder_value","incremental_shareholder_value")
+#base year data
+base_sales<- 100
+base_operating_profit <- base_sales * opm
+base_tax <- base_operating_profit* cash_tax_rate
+base_NOPAT <- base_operating_profit-base_tax
+base_incremental_investment <-  0
+base_FCF= base_NOPAT-base_incremental_investment
+base_PV_FCF=0
+base_PV_CUM_FCF = base_PV_FCF
+#base_PV_RESIDUAL_VALUE <-( base_NOPAT * (1+ inflation_rate))/(cost_of_capital- inflation_rate)
+base_PV_RESIDUAL_VALUE <- residual_value_inflation_method(base_NOPAT,inflation_rate,cost_of_capital)
+base_shareholder_value=base_PV_CUM_FCF + base_PV_RESIDUAL_VALUE
+table$base <- c(base_sales,base_operating_profit,base_tax,base_NOPAT,base_FCF,base_PV_FCF,base_PV_CUM_FCF, base_PV_RESIDUAL_VALUE,base_shareholder_value,0)
+print(table)
+print(table[,ncol(table)])
+
+no_forecast_years <- 5
+for ( i in 1:no_forecast_years) {
+  last_year <- ncol(table)
+  new_sales <- as.numeric(data.frame(table["sales",last_year]) * (1+ sales_growth_rate))
+  new_operating_profit <- new_sales * opm
+  new_tax <- new_operating_profit * cash_tax_rate
+  new_NOPAT <- new_operating_profit - new_tax
+  new_incremental_investment <- static_incremental_investment
+  new_FCF <- new_NOPAT - new_incremental_investment
+  new_PV_FCF = present_value(new_FCF,cost_of_capital,i)
+  new_PV_CUM_FCF <- new_PV_FCF+ table["PV_CUMULATIVE_FCF",last_year]
+  new_RESIDUAL <- residual_value_inflation_method(new_NOPAT,inflation_rate, cost_of_capital)
+  new_PV_RESIDUAL <- present_value(new_RESIDUAL,cost_of_capital,i)
+  new_shareholder_value <- new_PV_CUM_FCF+new_PV_RESIDUAL  
+  incremental_shareholder_value <- new_shareholder_value -   table["shareholder_value",1]
+  new_year <-paste0("year",i)
+  
+  table$new_year <- c(new_sales,new_operating_profit,new_tax,new_NOPAT,new_FCF,new_PV_FCF,new_PV_CUM_FCF,new_PV_RESIDUAL,new_shareholder_value,incremental_shareholder_value)
+  colnames(table)[ncol(table)] <- new_year
+  print(table)
+}
+
+
+```
+
+```{r}
+create_excpectations_table <-function(base_sales,sales_growth_rate,opm,cash_tax_rate,incremental_fixed_capital_rate,incremental_working_capital_rate,cost_of_capital,inflation_rate,num_forecast_years){
+
+table=data.frame(matrix(ncol=0,nrow=10))
+rownames(table)<-c("sales","operating_profit","cash_taxes","NOPAT","FCF","PV_FCF","PV_CUMULATIVE_FCF","PV_RESIDUAL_VALUE","shareholder_value","incremental_shareholder_value")
+#base year data
+
+base_operating_profit <- base_sales * opm
+base_tax <- base_operating_profit* cash_tax_rate
+base_NOPAT <- base_operating_profit-base_tax
+base_incremental_investment <-  0
+base_FCF= base_NOPAT-base_incremental_investment
+base_PV_FCF=0
+base_PV_CUM_FCF = base_PV_FCF
+#base_PV_RESIDUAL_VALUE <-( base_NOPAT * (1+ inflation_rate))/(cost_of_capital- inflation_rate)
+base_PV_RESIDUAL_VALUE <- residual_value_inflation_method(base_NOPAT,inflation_rate,cost_of_capital)
+base_shareholder_value=base_PV_CUM_FCF + base_PV_RESIDUAL_VALUE
+table$base <- c(base_sales,base_operating_profit,base_tax,base_NOPAT,base_FCF,base_PV_FCF,base_PV_CUM_FCF, base_PV_RESIDUAL_VALUE,base_shareholder_value,0)
+print(table)
+#print(table[,ncol(table)])
+
+for ( i in 1:num_forecast_years) {
+  last_year <- ncol(table)
+  old_sales <- as.numeric(data.frame(table["sales",last_year]))
+  new_sales <- (old_sales * (1+ sales_growth_rate))
+  new_operating_profit <- new_sales * opm
+  new_tax <- new_operating_profit * cash_tax_rate
+  new_NOPAT <- new_operating_profit - new_tax
+  incremental_sales = new_sales - old_sales
+  cat("incremental_sale",incremental_sales,"\n")
+  
+  new_incremental_fixed_investment <- incremental_fixed_capital_rate * incremental_sales
+  new_incremental_working_investment <- incremental_working_capital_rate * incremental_sales
+  
+  new_incremental_investment <- new_incremental_fixed_investment+ new_incremental_working_investment
+  cat("new_incremental_investment",new_incremental_investment,"\n")
+  new_FCF <- new_NOPAT - new_incremental_investment
+  new_PV_FCF = present_value(new_FCF,cost_of_capital,i)
+  new_PV_CUM_FCF <- new_PV_FCF+ table["PV_CUMULATIVE_FCF",last_year]
+  new_RESIDUAL <- residual_value_inflation_method(new_NOPAT,inflation_rate, cost_of_capital)
+  new_PV_RESIDUAL <- present_value(new_RESIDUAL,cost_of_capital,i)
+  new_shareholder_value <- new_PV_CUM_FCF+new_PV_RESIDUAL  
+  incremental_shareholder_value <- new_shareholder_value -   table["shareholder_value",1]
+  new_year <-paste0("year",i)
+  
+  table$new_year <- c(new_sales,new_operating_profit,new_tax,new_NOPAT,new_FCF,new_PV_FCF,new_PV_CUM_FCF,new_PV_RESIDUAL,new_shareholder_value,incremental_shareholder_value)
+  colnames(table)[ncol(table)] <- new_year
+}
+print(table)
+return(table)
+}
+
+```
+
+
+```{r}
+make_adjustments_to_corp_value <- function(table,non_op_assets,debt){
+  num_cols=ncol(table)
+  adjusted_shareholder_value <- c()
+  for (i in 1:num_cols){
+    sv <- table["shareholder_value",i]
+    adj_sv <- sv+non_op_assets-debt
+    print(adj_sv)
+    adjusted_shareholder_value <- c(adjusted_shareholder_value,adj_sv)
+  }
+  print(adjusted_shareholder_value)
+  table <- rbind(table,"adjusted_shareholder_value"=adjusted_shareholder_value)
+  print(table)
+  return(table)
+}
+
+
+find_forecast_period_for_given_price <- function(table,num_stocks,price){
+  num_cols=ncol(table)
+  shareholder_value_per_share <- c()
+  for (i in 1:num_cols){
+    svs <- table["adjusted_shareholder_value",i]/num_stocks
+    print(svs)
+    shareholder_value_per_share <- c(shareholder_value_per_share,svs)
+  }
+  table <- rbind(table,"adjusted_shareholder_value_per_share"=shareholder_value_per_share)
+  print(table)
+  return(table)
+}
+
+```
+
+*Chapter-5 Gateway Example*
+```{r}
+base_sales=8645.56
+sales_growth_rate=20/100
+opm=9/100
+cash_tax_rate=35/100
+incremental_fixed_capital_rate=11/100
+incremental_working_capital_rate=(-5/100)
+cost_of_capital=10/100
+inflation_rate=2/100
+num_forecast_years=10
+
+exp_table <- create_excpectations_table(base_sales,sales_growth_rate,opm,cash_tax_rate,incremental_fixed_capital_rate,incremental_working_capital_rate,cost_of_capital,inflation_rate,num_forecast_years)
+
+adj_table <- make_adjustments_to_corp_value(exp_table,1336.37,716.26)
+
+find_forecast_period_for_given_price(adj_table,321,25)
+```
+
+
+
 
 This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
 
