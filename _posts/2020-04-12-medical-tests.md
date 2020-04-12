@@ -1,3 +1,11 @@
+---
+layout: post
+title: "This is a test post for my R blog"
+date: 2020-04-12
+
+---
+
+
 Last week I was reading a twitter thread that talked about
 sensitivity/specificity of diagnostic tests (in the context of Covid)
 and how the diagnostic value varies with the prevalance of the disease
